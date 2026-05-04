@@ -54,6 +54,11 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
+    const data = await req.json();
+    
+    console.log("POST /api/products - Session:", JSON.stringify(session));
+    console.log("POST /api/products - Data:", JSON.stringify(data));
+
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -64,7 +69,23 @@ export async function POST(req: NextRequest) {
     }
 
     // Check seller is approved (unless admin or demo)
-    if (role === "seller" && session.user.id !== "demo-seller") {
+    const isDemoSeller = session.user.email === "seller@demo.com" || session.user.id?.startsWith("demo-");
+    
+    // Ensure the user exists in the database to prevent foreign key errors
+    // This is especially important for demo accounts that might not be in the DB yet
+    let dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
+    if (!dbUser && isDemoSeller) {
+      dbUser = await prisma.user.create({
+        data: {
+          id: session.user.id,
+          email: session.user.email || `${session.user.id}@demo.com`,
+          name: session.user.name || "Demo User",
+          role: (session.user as any).role || "seller",
+        }
+      });
+    }
+
+    if (role === "seller" && !isDemoSeller) {
       const sellerProfile = await prisma.sellerProfile.findUnique({
         where: { userId: session.user.id },
       });
@@ -72,8 +93,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Seller account not approved yet. Please wait for admin approval." }, { status: 403 });
       }
     }
-
-    const data = await req.json();
 
     if (!data.name || !data.description || data.price === undefined || !data.category || data.stock === undefined) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -106,15 +125,19 @@ export async function POST(req: NextRequest) {
         sellerId: session.user.id,
         rating: 0,
         reviews: 0,
-        status: role === "admin" && data.status ? data.status : "draft",
+        status: (role === "admin" || isDemoSeller) ? "active" : "draft",
         vendor: session.user.name || "Unknown Vendor",
         inStock: Number(data.stock) > 0,
       }
     });
 
     return NextResponse.json(product);
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Failed to create product" }, { status: 500 });
+  } catch (error: any) {
+    console.error("API Error creating product:", error);
+    return NextResponse.json({ 
+      error: "Failed to create product", 
+      details: error.message,
+      code: error.code 
+    }, { status: 500 });
   }
 }

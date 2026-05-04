@@ -75,8 +75,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         };
 
         if (demoAccounts[email] && demoAccounts[email].pw === password) {
-          const { pw, ...user } = demoAccounts[email];
-          return user;
+          // Check if user already exists in DB to get their real ID
+          let dbUser = await prisma.user.findUnique({ where: { email: demoAccounts[email].email } });
+          
+          if (!dbUser) {
+            // Create the demo user in the DB if it doesn't exist
+            dbUser = await prisma.user.create({
+              data: {
+                id: demoAccounts[email].id, // Use the fixed demo ID
+                email: demoAccounts[email].email,
+                name: demoAccounts[email].name,
+                role: demoAccounts[email].role,
+                // No password needed for demo accounts in DB as they use credentials check
+              }
+            });
+          }
+
+          return {
+            id: dbUser.id,
+            name: dbUser.name,
+            email: dbUser.email,
+            image: dbUser.image,
+            role: dbUser.role
+          };
         }
 
         const user = await prisma.user.findUnique({ where: { email } });
@@ -93,6 +114,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        token.email = user.email;
         token.role = (user as any).role || "customer";
       }
       return token;
@@ -100,7 +122,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
-        (session.user as unknown as Record<string, unknown>).role = token.role;
+        session.user.email = token.email as string;
+        (session.user as any).role = token.role;
       }
       return session;
     },

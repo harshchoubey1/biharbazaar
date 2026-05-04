@@ -5,6 +5,7 @@ import Footer from "@/components/Footer";
 import { useSession } from "next-auth/react";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface SellerProduct {
   id: string | number;
@@ -24,6 +25,7 @@ interface SellerProduct {
 
 export default function SellerPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [myProducts, setMyProducts] = useState<SellerProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [sellerStatus, setSellerStatus] = useState<string>("pending");
@@ -219,7 +221,10 @@ export default function SellerPage() {
   };
 
   const handleAdd = async () => {
-    if (!formData.name || !formData.price || !formData.stock) return;
+    if (!formData.name || !formData.price || !formData.stock || !formData.description) {
+      alert("Please fill in all required fields including description.");
+      return;
+    }
 
     try {
       let uploadedUrls: string[] = [];
@@ -267,9 +272,12 @@ export default function SellerPage() {
         body: JSON.stringify(productPayload),
       });
 
-      if (!res.ok) throw new Error("Failed to save product");
+      const resData = await res.json();
+      if (!res.ok) {
+        throw new Error(resData.error || resData.details || "Failed to save product");
+      }
       
-      const savedProduct = await res.json();
+      const savedProduct = resData;
       
       const newProd: SellerProduct = {
         id: savedProduct.id,
@@ -291,9 +299,11 @@ export default function SellerPage() {
       resetForm();
       setShowAddForm(false);
       alert("Product added successfully!");
-    } catch (error) {
+      router.push("/");
+    } catch (error: any) {
       console.error("Error adding product:", error);
-      alert("Failed to add product.");
+      const errorMsg = error instanceof Error ? error.message : "Failed to add product.";
+      alert(errorMsg);
     }
   };
 
