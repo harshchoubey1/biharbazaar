@@ -1,20 +1,24 @@
 import { PrismaClient } from "@prisma/client";
-import { createClient } from "@libsql/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
-
-if (process.env.NODE_ENV === "production" && !process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL is missing in production environment");
-}
-const dbUrl = process.env.DATABASE_URL || "file:./dev.db";
-
-const libsql = createClient({
-  url: dbUrl,
-});
-// @ts-expect-error type mismatch between libsql client and prisma adapter
-const adapter = new PrismaLibSql(libsql);
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import path from "path";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
-export const prisma = globalForPrisma.prisma || new PrismaClient({ adapter });
+let prisma: PrismaClient;
+
+if (globalForPrisma.prisma) {
+  prisma = globalForPrisma.prisma;
+} else {
+  // Use absolute path for Windows compatibility and predictable location
+  const dbFilename = "dev.db";
+  const absPath = path.resolve(process.cwd(), dbFilename);
+  const resolvedUrl = "file:" + absPath.replace(/\\/g, "/");
+
+  const adapter = new PrismaBetterSqlite3({ url: resolvedUrl } as any);
+  
+  prisma = new PrismaClient({ adapter });
+}
+
+export { prisma };
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;

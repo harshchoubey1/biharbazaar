@@ -16,24 +16,22 @@ export async function GET(req: NextRequest) {
     if (sellerId) {
       const session = await auth();
       if (session?.user?.id === sellerId || (session?.user as any)?.role === "admin") {
-        delete where.status; // allow all statuses for seller's own products or admin
+        delete where.status;
       }
       where.sellerId = sellerId;
-    } else {
-      // For public browsing: only show products from approved sellers or demo seller
-      where.OR = [
-        { seller: { sellerProfile: { status: "approved" } } },
-        { sellerId: "demo-seller" }
-      ];
     }
 
     if (category && category !== "All") where.category = category;
     
     if (search) {
-      where.OR = [
-        { name: { contains: search } },
-        { vendor: { contains: search } },
-        { category: { contains: search } },
+      where.AND = [
+        {
+          OR: [
+            { name: { contains: search } },
+            { vendor: { contains: search } },
+            { category: { contains: search } },
+          ],
+        },
       ];
     }
 

@@ -4,9 +4,9 @@ import { useState } from "react";
 const WHATSAPP_NUMBER = "919876543210"; // Replace with your actual WhatsApp number
 
 const quickMessages = [
-  { label: "🛍️ List a product via WhatsApp", msg: "Hi! I want to list my product on Bihar eKart. Can you help me?" },
+  { label: "➕ उत्पाद जोड़ें / Add Product (Seller)", msg: "__add_product__" },
+  { label: "🛍️ उत्पाद देखें / Browse Products", msg: "__browse__" },
   { label: "📦 Track my order", msg: "Hi! I want to track my recent order on Bihar eKart." },
-  { label: "❓ Ask a question", msg: "Hi! I have a question about Bihar eKart." },
   { label: "💬 Talk to support", msg: "Hi! I need help with my Bihar eKart account." },
 ];
 
@@ -14,7 +14,7 @@ export default function WhatsAppButton() {
   const [open, setOpen] = useState(false);
 
   const openChat = (msg: string) => {
-    if (msg.includes("list my product")) {
+    if (msg === "__add_product__" || msg === "__browse__") {
       window.location.href = "/prototype/whatsapp";
     } else {
       const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`;

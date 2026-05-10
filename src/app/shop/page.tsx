@@ -71,6 +71,7 @@ function ShopContent() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
+              suppressHydrationWarning
               type="text"
               placeholder="Search products, vendors, categories..."
               value={search}
@@ -79,6 +80,7 @@ function ShopContent() {
             />
           </div>
           <select
+            suppressHydrationWarning
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
             className="px-4 py-3 rounded-2xl border border-black/8 dark:border-white/8 bg-white dark:bg-white/5 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all text-sm font-medium min-w-[180px]"
@@ -93,6 +95,7 @@ function ShopContent() {
         {/* Category pills */}
         <div className={`flex flex-wrap gap-2 mb-8 ${visible ? "animate-fade-in-up [animation-delay:200ms]" : "opacity-0"}`}>
           <button
+            suppressHydrationWarning
             onClick={() => setSelectedCategory("All")}
             className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 ${
               selectedCategory === "All"
@@ -104,6 +107,7 @@ function ShopContent() {
           </button>
           {categories.map((cat) => (
             <button
+              suppressHydrationWarning
               key={cat.name}
               onClick={() => setSelectedCategory(cat.name)}
               className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 flex items-center gap-1.5 ${
