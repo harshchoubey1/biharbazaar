@@ -14,10 +14,8 @@ turso db tokens create biharbazaar # copy the token
 
 ### 2. Push schema to Turso
 ```bash
-# Set env vars temporarily for migration
-$env:DATABASE_URL="libsql://YOUR_DB_URL"
-$env:DATABASE_AUTH_TOKEN="YOUR_TOKEN"
-npx prisma db push
+# Push your local Prisma migration directly into Turso
+turso db shell biharbazaar < prisma/migrations/20260503070106_init/migration.sql
 ```
 
 ### 3. Add env vars on Vercel dashboard
