@@ -7,10 +7,10 @@ function createPrismaClient(): PrismaClient {
 
   // --- Production / Vercel: use Turso (LibSQL) ---
   if (url.startsWith("libsql://") || url.startsWith("wss://")) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createClient } = require("@libsql/client") as typeof import("@libsql/client");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { PrismaLibSql } = require("@prisma/adapter-libsql") as typeof import("@prisma/adapter-libsql");
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+    const { createClient } = require("@libsql/client") as any;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+    const { PrismaLibSql } = require("@prisma/adapter-libsql") as any;
     const libsql = createClient({
       url,
       authToken: process.env.DATABASE_AUTH_TOKEN,
@@ -21,11 +21,10 @@ function createPrismaClient(): PrismaClient {
   }
 
   // --- Local development: use better-sqlite3 ---
-  // Dynamic require keeps this out of the Vercel bundle entirely
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const Database = require("better-sqlite3") as typeof import("better-sqlite3").default;
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { PrismaBetterSqlite3 } = require("@prisma/adapter-better-sqlite3") as typeof import("@prisma/adapter-better-sqlite3");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+  const Database = (require("better-sqlite3") as any).default || require("better-sqlite3");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
+  const { PrismaBetterSqlite3 } = require("@prisma/adapter-better-sqlite3") as any;
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const path = require("path") as typeof import("path");
   const dbPath = url.replace(/^file:/, "");
