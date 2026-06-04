@@ -1,200 +1,170 @@
 "use client";
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { useSession, signOut as nextAuthSignOut } from "next-auth/react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 export interface User {
-  id?: string;
+  id: string;
   name: string;
   email: string;
   role: "customer" | "seller" | "admin";
 }
 
 export interface Address {
-  fullName: string;
-  phone: string;
-  street: string;
+  id: string;
+  label: string;
+  name: string;
+  line1: string;
+  line2?: string;
   city: string;
   state: string;
   pincode: string;
+  phone: string;
 }
 
-export interface Order {
+interface Order {
   id: string;
-  items: { name: string; price: number; quantity: number; image?: string }[];
+  items: any[];
   total: number;
-  address: Address;
+  status: string;
   date: string;
-  status: "Processing" | "Shipped" | "Out for Delivery" | "Delivered";
+  address?: any;
 }
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => { success: boolean; error?: string };
-  register: (name: string, email: string, password: string, role: "customer" | "seller") => { success: boolean; error?: string };
-  logout: () => void;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (name: string, email: string, password: string, role?: string) => Promise<{ success: boolean; error?: string }>;
+  logout: () => Promise<void>;
   addresses: Address[];
   addAddress: (addr: Address) => void;
   orders: Order[];
   placeOrder: (order: Omit<Order, "id" | "date" | "status">) => string;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Pre-built demo accounts for presentation
-const DEMO_ACCOUNTS: Record<string, { password: string; user: User }> = {
-  "admin@demo.com": { password: "admin123", user: { id: "demo-admin", name: "Demo Admin", email: "admin@demo.com", role: "admin" } },
-  "seller@demo.com": { password: "seller123", user: { id: "demo-seller", name: "Demo Seller", email: "seller@demo.com", role: "seller" } },
-  "user@demo.com": { password: "user123", user: { id: "demo-user", name: "Demo Customer", email: "user@demo.com", role: "customer" } },
-  "admin@biharbazaar.com": { password: "password123", user: { id: "demo-admin", name: "Admin", email: "admin@biharbazaar.com", role: "admin" } },
-  "seller@biharbazaar.com": { password: "password123", user: { id: "demo-seller", name: "Bihar Bazaar Seller", email: "seller@biharbazaar.com", role: "seller" } },
-};
+const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
-  const [loaded, setLoaded] = useState(false);
 
-  const { data: session, status } = useSession();
-
-  // Load from localStorage on mount
+  // Load persisted user on mount
   useEffect(() => {
-    try {
-      const u = localStorage.getItem("ekart-user");
-      const a = localStorage.getItem("ekart-addresses");
-      const o = localStorage.getItem("ekart-orders");
-      if (u) setUser(JSON.parse(u));
-      if (a) setAddresses(JSON.parse(a));
-      if (o) setOrders(JSON.parse(o));
-    } catch {}
-    setLoaded(true);
+    const stored = localStorage.getItem("bb_user");
+    if (stored) {
+      try {
+        setUser(JSON.parse(stored));
+      } catch {}
+    }
+    setLoading(false);
+
+    const storedAddr = localStorage.getItem("bb_addresses");
+    if (storedAddr) setAddresses(JSON.parse(storedAddr));
+
+    const storedOrders = localStorage.getItem("bb_orders");
+    if (storedOrders) setOrders(JSON.parse(storedOrders));
   }, []);
 
-  // Sync with NextAuth session
-  useEffect(() => {
-    if (status === "loading") return;
-
-    if (status === "authenticated" && session?.user) {
-      setUser({
-        id: session.user.id,
-        name: session.user.name || "User",
-        email: session.user.email || "",
-        role: (session.user as any).role || "customer",
-      });
-    } else if (status === "unauthenticated") {
-      // Only clear if the user was a NextAuth user (has a long cuid/id) 
-      // or if they're not a demo user.
-      setUser(prev => {
-        if (!prev) return null;
-        // Demo users have specific emails we know
-        const isDemo = Object.values(DEMO_ACCOUNTS).some(d => d.user.email.toLowerCase() === prev.email.toLowerCase());
-        if (isDemo) return prev; 
-        // If they had an ID and status is unauthenticated, they're logged out of NextAuth
-        return prev.id ? null : prev;
-      });
-    }
-  }, [session, status]);
-
-  // Persist to localStorage on change
-  useEffect(() => {
-    if (!loaded) return;
-    if (user) localStorage.setItem("ekart-user", JSON.stringify(user));
-    else localStorage.removeItem("ekart-user");
-    localStorage.setItem("ekart-addresses", JSON.stringify(addresses));
-    localStorage.setItem("ekart-orders", JSON.stringify(orders));
-  }, [user, addresses, orders, loaded]);
-
-  const login = (email: string, password: string): { success: boolean; error?: string } => {
-    const lower = email.toLowerCase().trim();
-    
-    // Support shorthands: "admin" -> "admin@demo.com", etc.
-    let targetEmail = lower;
-    if (lower === "admin") targetEmail = "admin@demo.com";
-    if (lower === "seller") targetEmail = "seller@demo.com";
-    if (lower === "user") targetEmail = "user@demo.com";
-
-    // Check demo accounts first
-    const demo = DEMO_ACCOUNTS[targetEmail];
-    if (demo && demo.password === password) {
-      setUser(demo.user);
-      return { success: true };
-    }
-
-    // Check registered users from localStorage
-    try {
-      const registered = JSON.parse(localStorage.getItem("ekart-registered-users") || "{}");
-      if (registered[targetEmail]) {
-        const storedUser = registered[targetEmail].user || registered[targetEmail];
-        setUser(storedUser);
-        return { success: true };
-      }
-    } catch {}
-
-    return { success: false, error: "Incorrect email or password." };
+  const persistUser = (u: User | null) => {
+    setUser(u);
+    if (u) localStorage.setItem("bb_user", JSON.stringify(u));
+    else localStorage.removeItem("bb_user");
   };
 
-  const register = (name: string, email: string, password: string, role: "customer" | "seller"): { success: boolean; error?: string } => {
-    const lower = email.toLowerCase().trim();
-
-    // Check if already exists
-    if (DEMO_ACCOUNTS[lower]) {
-      return { success: false, error: "An account with this email already exists." };
-    }
-
+  const login = async (email: string, password: string) => {
     try {
-      const registered = JSON.parse(localStorage.getItem("ekart-registered-users") || "{}");
-      if (registered[lower]) {
-        return { success: false, error: "An account with this email already exists." };
-      }
-
-      // Save to localStorage without password
-      const newUser: User = { 
-        id: "user-" + Math.random().toString(36).substr(2, 9),
-        name, 
-        email: lower, 
-        role 
-      };
-      registered[lower] = newUser;
-      localStorage.setItem("ekart-registered-users", JSON.stringify(registered));
-
-      // Auto-login
-      setUser(newUser);
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) return { success: false, error: data.error || "Login failed" };
+      persistUser(data.user);
       return { success: true };
     } catch {
-      return { success: false, error: "Something went wrong." };
+      // Fallback: check local registered users
+      try {
+        const registered = JSON.parse(localStorage.getItem("ekart-registered-users") || "{}");
+        const lower = email.toLowerCase();
+        const found = registered[lower];
+        if (found) {
+          const u: User = { id: found.id || "local-" + lower, name: found.name || lower, email: lower, role: found.role || "customer" };
+          persistUser(u);
+          return { success: true };
+        }
+      } catch {}
+      return { success: false, error: "Network error – please try again." };
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    nextAuthSignOut({ redirect: true, callbackUrl: "/login" });
+  const register = async (name: string, email: string, password: string, role = "customer") => {
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password, role }),
+      });
+      const data = await res.json();
+      if (!res.ok) return { success: false, error: data.error || "Registration failed" };
+      persistUser(data.user);
+      return { success: true };
+    } catch {
+      // Offline fallback
+      const lower = email.toLowerCase();
+      const newUser: User = { id: "local-" + Math.random().toString(36).slice(2), name, email: lower, role: role as any };
+      try {
+        const registered = JSON.parse(localStorage.getItem("ekart-registered-users") || "{}");
+        if (registered[lower]) return { success: false, error: "Email already registered." };
+        registered[lower] = { ...newUser, password };
+        localStorage.setItem("ekart-registered-users", JSON.stringify(registered));
+      } catch {}
+      persistUser(newUser);
+      return { success: true };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await fetch("/api/auth/login", { method: "DELETE" });
+    } catch {}
+    persistUser(null);
+    window.location.href = "/";
   };
 
   const addAddress = (addr: Address) => {
-    setAddresses((prev) => [...prev, addr]);
+    const updated = [...addresses, addr];
+    setAddresses(updated);
+    localStorage.setItem("bb_addresses", JSON.stringify(updated));
   };
 
-  const placeOrder = (order: Omit<Order, "id" | "date" | "status">): string => {
+  const placeOrder = (order: Omit<Order, "id" | "date" | "status">) => {
     const id = "ORD-" + Date.now().toString(36).toUpperCase();
-    const newOrder: Order = {
-      ...order,
-      id,
-      date: new Date().toISOString(),
-      status: "Processing",
-    };
-    setOrders((prev) => [newOrder, ...prev]);
+    const newOrder: Order = { ...order, id, date: new Date().toISOString(), status: "Processing" };
+    const updated = [newOrder, ...orders];
+    setOrders(updated);
+    localStorage.setItem("bb_orders", JSON.stringify(updated));
+
+    // Also save to MongoDB in background
+    fetch("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...order, orderId: id }),
+    }).catch(() => {});
+
     return id;
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, addresses, addAddress, orders, placeOrder }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, addresses, addAddress, orders, placeOrder }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used within an AuthProvider");
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
 }

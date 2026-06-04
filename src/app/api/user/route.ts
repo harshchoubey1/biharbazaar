@@ -1,80 +1,54 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
-import bcrypt from "bcryptjs";
+import connectToDatabase from "@/lib/mongodb";
+import User from "@/models/User";
+import SellerProfile from "@/models/SellerProfile";
+import { getAuthUser } from "@/lib/apiAuth";
 
-// Register a new user
-export async function POST(req: NextRequest) {
+// GET /api/user — returns current user + seller profile
+export async function GET(req: NextRequest) {
   try {
-    const { name, email, password, phone, role } = await req.json();
+    const authUser = await getAuthUser(req);
+    if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    if (!email && !phone) {
-      return NextResponse.json({ error: "Email or phone required" }, { status: 400 });
+    await connectToDatabase();
+    const user = await User.findById(authUser.id).lean().catch(() => null);
+
+    let sellerProfile = null;
+    if (authUser.role === "seller" || authUser.role === "admin") {
+      sellerProfile = await SellerProfile.findOne({ userId: authUser.id }).lean().catch(() => null);
     }
 
-    // Check if exists
-    if (email) {
-      const existing = await prisma.user.findUnique({ where: { email } });
-      if (existing) return NextResponse.json({ error: "Email already registered" }, { status: 400 });
-    }
-    if (phone) {
-      const existing = await prisma.user.findUnique({ where: { phone } });
-      if (existing) return NextResponse.json({ error: "Phone already registered" }, { status: 400 });
-    }
-
-    const hashedPassword = password ? await bcrypt.hash(password, 10) : null;
-
-    const user = await prisma.user.create({
-      data: {
-        name: name || `User-${Date.now().toString(36)}`,
-        email: email || null,
-        phone: phone || null,
-        password: hashedPassword,
-        role: role || "customer",
-      },
+    return NextResponse.json({
+      id: authUser.id,
+      name: authUser.name,
+      email: authUser.email,
+      role: authUser.role,
+      ...(user || {}),
+      sellerProfile,
     });
-
-    return NextResponse.json({ id: user.id, name: user.name, email: user.email, role: user.role });
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Registration failed" }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "Failed to fetch user" }, { status: 500 });
   }
 }
 
-// Get current user profile
-export async function GET() {
+// PATCH /api/user — update profile
+export async function PATCH(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const authUser = await getAuthUser(req);
+    if (!authUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // Handle demo accounts without database record
-    if (session.user.id.startsWith("demo-")) {
-      return NextResponse.json({
-        id: session.user.id,
-        name: session.user.name,
-        email: session.user.email,
-        role: (session.user as any).role,
-        sellerProfile: (session.user as any).role === "seller" || (session.user as any).role === "admin" ? {
-          status: "approved",
-          shopName: "Bihar Bazaar Demo Store",
-          description: "Authentic products from the heart of Bihar."
-        } : null
-      });
-    }
+    await connectToDatabase();
+    const data = await req.json();
+    const { name, phone, image } = data;
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      include: { sellerProfile: true },
-    });
-    
-    if (user) {
-      // Remove sensitive fields
-      const { password, ...safeUser } = user as any;
-      return NextResponse.json(safeUser);
-    }
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
-  } catch (err) {
-    console.error("User API error:", err);
-    return NextResponse.json({ error: "Failed to fetch user" }, { status: 500 });
+    const updated = await User.findByIdAndUpdate(
+      authUser.id,
+      { ...(name && { name }), ...(phone && { phone }), ...(image && { image }) },
+      { new: true }
+    ).lean();
+
+    return NextResponse.json(updated);
+  } catch {
+    return NextResponse.json({ error: "Failed to update user" }, { status: 500 });
   }
 }

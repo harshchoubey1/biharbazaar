@@ -1,52 +1,57 @@
 "use client";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ProductCard from "@/components/ProductCard";
 import { categories } from "@/data/products";
-import { Suspense } from "react";
 
 function ShopContent() {
   const searchParams = useSearchParams();
   const initialCategory = searchParams.get("category") || "All";
-  const [search, setSearch] = useState("");
+  const initialSearch = searchParams.get("search") || "";
+  const [search, setSearch] = useState(initialSearch);
   const [selectedCategory, setSelectedCategory] = useState(initialCategory);
   const [sortBy, setSortBy] = useState("default");
   const [visible, setVisible] = useState(false);
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    const category = searchParams.get("category") || "All";
+    const query = searchParams.get("search") || "";
+    setSelectedCategory(category);
+    setSearch(query);
+  }, [searchParams]);
+
   useEffect(() => { 
     setVisible(true); 
-    fetch("/api/products")
-      .then(res => res.json())
-      .then(data => {
-        if (!Array.isArray(data)) return;
-        const mapped = data.map((p: any) => ({
-          ...p,
-          images: Array.isArray(p.images) ? p.images : (typeof p.images === 'string' ? JSON.parse(p.images || "[]") : []),
-          highlights: Array.isArray(p.highlights) ? p.highlights : (typeof p.highlights === 'string' ? JSON.parse(p.highlights || "[]") : []),
-          details: typeof p.details === 'object' && p.details !== null ? p.details : (typeof p.details === 'string' ? JSON.parse(p.details || "{}") : {}),
-        }));
-        setProducts(mapped);
+    setLoading(true);
+    const params = new URLSearchParams();
+    if (selectedCategory && selectedCategory !== "All") {
+      params.append("category", selectedCategory);
+    }
+    if (search.trim()) {
+      params.append("search", search.trim());
+    }
+    if (sortBy && sortBy !== "default") {
+      params.append("sort", sortBy);
+    }
+
+    fetch(`/api/products?${params.toString()}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setProducts(data);
+        }
       })
-      .catch(err => console.error("Error fetching products:", err))
+      .catch((err) => console.error("Error loading products:", err))
       .finally(() => setLoading(false));
-  }, []);
+  }, [selectedCategory, search, sortBy]);
 
   const filtered = useMemo(() => {
-    let result = products;
-    if (selectedCategory !== "All") result = result.filter((p) => p.category === selectedCategory);
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter((p) => p.name.toLowerCase().includes(q) || p.vendor.toLowerCase().includes(q) || p.category.toLowerCase().includes(q));
-    }
-    if (sortBy === "price-asc") result = [...result].sort((a, b) => a.price - b.price);
-    if (sortBy === "price-desc") result = [...result].sort((a, b) => b.price - a.price);
-    if (sortBy === "rating") result = [...result].sort((a, b) => b.rating - a.rating);
-    return result;
-  }, [search, selectedCategory, sortBy]);
+    return products;
+  }, [products]);
 
   return (
     <div>

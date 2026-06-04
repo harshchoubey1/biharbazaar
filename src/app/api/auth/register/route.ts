@@ -1,54 +1,61 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import connectToDatabase from "@/lib/mongodb";
+import User from "@/models/User";
+import SellerProfile from "@/models/SellerProfile";
+import { signToken, setAuthCookie } from "@/lib/apiAuth";
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
-    const { name, email, password, role, shopName, description, businessAddress, taxId } = await req.json();
+    await connectToDatabase();
+    const { name, email, password, role, shopName, description, businessAddress, taxId } =
+      await req.json();
 
     if (!name || !email || !password) {
-      return NextResponse.json({ message: "Missing required fields" }, { status: 400 });
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    // Check if user exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
-      return NextResponse.json({ message: "User already exists with this email" }, { status: 400 });
+    const existing = await User.findOne({ email: email.toLowerCase() });
+    if (existing) {
+      return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashed = await bcrypt.hash(password, 10);
+    const userRole = role === "seller" ? "seller" : "customer";
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        role: role === "seller" ? "seller" : "customer",
-      },
+    const user = await User.create({
+      name,
+      email: email.toLowerCase(),
+      password: hashed,
+      role: userRole,
     });
 
-    // Create pending SellerProfile if registering as seller
-    if (role === "seller") {
-      await prisma.sellerProfile.create({
-        data: {
-          userId: user.id,
-          shopName: shopName || name,
-          description: description || null,
-          gstNumber: businessAddress || null, // Mapping businessAddress to gstNumber for now
-          bankAccount: taxId || null,         // Mapping taxId to bankAccount for now
-          status: "pending",
-        },
+    if (userRole === "seller") {
+      await SellerProfile.create({
+        userId: user._id.toString(),
+        shopName: shopName || name,
+        description: description || "",
+        gstNumber: businessAddress || "",
+        bankAccount: taxId || "",
+        status: "pending",
       });
     }
 
-    return NextResponse.json({ message: "User created successfully", user: { id: user.id, email: user.email, role: user.role } }, { status: 201 });
-  } catch (error) {
-    console.error("Signup Error:", error);
-    return NextResponse.json({ message: "An error occurred during signup" }, { status: 500 });
+    const token = signToken({
+      id: user._id.toString(),
+      email: user.email,
+      name: user.name,
+      role: user.role,
+    });
+
+    const res = NextResponse.json(
+      { success: true, user: { id: user._id, email: user.email, name: user.name, role: user.role } },
+      { status: 201 }
+    );
+    setAuthCookie(res, token);
+    return res;
+  } catch (err: any) {
+    console.error("Register error:", err);
+    return NextResponse.json({ error: "Registration failed", details: err.message }, { status: 500 });
   }
 }

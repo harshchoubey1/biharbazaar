@@ -1,74 +1,84 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import connectToDatabase from "@/lib/mongodb";
+import Product from "@/models/Product";
+import Order from "@/models/Order";
+import { getAuthUser } from "@/lib/apiAuth";
 
-// Get seller dashboard data
 export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const user = await getAuthUser(req);
+    if (!user || (user.role !== "seller" && user.role !== "admin")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    await connectToDatabase();
+    const sellerId = user.id;
 
     const { searchParams } = new URL(req.url);
     const tab = searchParams.get("tab") || "overview";
 
-    const sellerId = session.user.id;
+    // Get all products owned by this seller
+    const products = await Product.find({ sellerId }).lean();
+    const productIds = products.map((p: any) => p._id.toString());
 
     if (tab === "overview") {
-      const products = await prisma.product.findMany({ where: { sellerId } });
       const totalProducts = products.length;
-      const activeProducts = products.filter(p => p.status === "active").length;
-      const totalInventoryValue = products.reduce((s, p) => s + p.price * p.stock, 0);
+      const activeProducts = products.filter((p: any) => p.status === "active").length;
+      const totalInventoryValue = products.reduce((s: number, p: any) => s + p.price * (p.stock || 0), 0);
 
-      // Get orders containing this seller's products
-      const orderItems = await prisma.orderItem.findMany({
-        where: { product: { sellerId } },
-        include: { order: true, product: true },
-      });
-      const totalOrders = new Set(orderItems.map(i => i.orderId)).size;
-      const totalRevenue = orderItems.reduce((s, i) => s + i.price * i.quantity, 0);
-      const pendingOrders = orderItems.filter(i => i.order.status !== "delivered").length;
+      // Find all orders that contain any product of this seller
+      const orders = await Order.find({ "items.productId": { $in: productIds } }).lean();
+
+      let totalOrders = orders.length;
+      let totalRevenue = 0;
+      let pendingOrders = 0;
+
+      for (const order of orders) {
+        if (order.status !== "Delivered") {
+          pendingOrders++;
+        }
+        // Calculate revenue for only the items belonging to this seller
+        for (const item of (order as any).items) {
+          if (productIds.includes(item.productId)) {
+            totalRevenue += item.price * item.qty;
+          }
+        }
+      }
 
       return NextResponse.json({
-        totalProducts, activeProducts, totalInventoryValue,
-        totalOrders, totalRevenue, pendingOrders,
+        totalProducts,
+        activeProducts,
+        totalInventoryValue,
+        totalOrders,
+        totalRevenue,
+        pendingOrders,
       });
     }
 
     if (tab === "products") {
-      const products = await prisma.product.findMany({
-        where: { sellerId },
-        orderBy: { createdAt: "desc" },
-      });
       return NextResponse.json(products);
     }
 
     if (tab === "orders") {
-      const orderItems = await prisma.orderItem.findMany({
-        where: { product: { sellerId } },
-        include: {
-          order: { include: { address: true, user: true } },
-          product: true,
-        },
-        orderBy: { order: { createdAt: "desc" } },
+      // Find orders and filter items for current seller
+      const orders = await Order.find({ "items.productId": { $in: productIds } })
+        .sort({ createdAt: -1 })
+        .lean();
+
+      const filteredOrders = orders.map((order: any) => {
+        const sellerItems = order.items.filter((item: any) => productIds.includes(item.productId));
+        return {
+          ...order,
+          items: sellerItems,
+        };
       });
 
-      // Group by order
-      const orderMap = new Map<string, unknown>();
-      for (const item of orderItems) {
-        if (!orderMap.has(item.orderId)) {
-          orderMap.set(item.orderId, {
-            ...item.order,
-            items: [],
-          });
-        }
-        (orderMap.get(item.orderId) as { items: unknown[] }).items.push(item);
-      }
-      return NextResponse.json(Array.from(orderMap.values()));
+      return NextResponse.json(filteredOrders);
     }
 
     return NextResponse.json({ error: "Invalid tab" }, { status: 400 });
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Failed" }, { status: 500 });
+  } catch (error: any) {
+    console.error("Seller GET API error:", error);
+    return NextResponse.json({ error: "Failed to fetch seller dashboard data" }, { status: 500 });
   }
 }

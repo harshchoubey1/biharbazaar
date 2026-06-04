@@ -1,68 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import connectToDatabase from "@/lib/mongodb";
+import ProductModel from "@/models/Product";
+import { getAuthUser } from "@/lib/apiAuth";
 
-// Get reviews for a product
-export async function GET(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const productId = searchParams.get("productId");
-
-    if (!productId) {
-      return NextResponse.json({ error: "productId required" }, { status: 400 });
-    }
-
-    const reviews = await prisma.review.findMany({
-      where: { productId },
-      orderBy: { createdAt: "desc" },
-    });
-
-    return NextResponse.json(reviews);
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Failed to fetch reviews" }, { status: 500 });
-  }
-}
-
-// Submit a new review
+// POST /api/reviews  — add a review to a product
 export async function POST(req: NextRequest) {
   try {
-    const data = await req.json();
-    const { productId, userName, rating, title, body, images } = data;
+    await connectToDatabase();
+    const user = await getAuthUser(req);
+    const { productId, rating, title, body } = await req.json();
 
-    if (!productId || !userName || !rating || !title || !body) {
+    if (!productId || !rating || !title || !body) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const review = await prisma.review.create({
-      data: {
-        productId,
-        userName,
-        rating: Number(rating),
-        title,
-        body,
-        images: images ? JSON.stringify(images) : null,
-        verified: false,
+    const newReview = {
+      id: Date.now(),
+      userName: user?.name || "Anonymous",
+      rating: Number(rating),
+      title,
+      body,
+      date: new Date().toISOString().slice(0, 10),
+      verified: !!user,
+      helpful: 0,
+    };
+
+    const product = await ProductModel.findByIdAndUpdate(
+      productId,
+      {
+        $push: { mockReviews: newReview },
+        $inc: { reviews: 1 },
       },
-    });
+      { new: true }
+    );
 
-    // Update product review count and recalculate average rating
-    const allReviews = await prisma.review.findMany({
-      where: { productId },
-      select: { rating: true },
-    });
-    const avgRating = allReviews.reduce((sum, r) => sum + r.rating, 0) / allReviews.length;
+    if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
 
-    await prisma.product.update({
-      where: { id: productId },
-      data: {
-        reviews: allReviews.length,
-        rating: Math.round(avgRating * 10) / 10,
-      },
-    });
+    // Recalculate avg rating
+    const total = product.mockReviews.reduce((s: number, r: any) => s + r.rating, 0);
+    product.rating = Number((total / product.mockReviews.length).toFixed(1));
+    await product.save();
 
-    return NextResponse.json(review);
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Failed to create review" }, { status: 500 });
+    return NextResponse.json({ success: true, review: newReview });
+  } catch (err: any) {
+    return NextResponse.json({ error: "Failed to add review", details: err.message }, { status: 500 });
   }
 }

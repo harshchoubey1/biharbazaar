@@ -1,41 +1,49 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import connectToDatabase from "@/lib/mongodb";
+import Order from "@/models/Order";
+import { getAuthUser } from "@/lib/apiAuth";
 
-// Get single order with full details
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+// GET /api/orders/[id]
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    await connectToDatabase();
     const { id } = await params;
-    const order = await prisma.order.findUnique({
-      where: { id },
-      include: { items: { include: { product: true } }, address: true },
-    });
-    if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    const order = await Order.findById(id).lean();
+    if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+
+    // Validate access
+    const user = await getAuthUser(req);
+    if (!user || (user.id !== order.userId && user.role !== "admin" && user.role !== "seller")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     return NextResponse.json(order);
   } catch {
-    return NextResponse.json({ error: "Failed" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to fetch order" }, { status: 500 });
   }
 }
 
-// Update order status (seller/admin)
+// PUT /api/orders/[id] — Update order status (seller/admin)
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const user = await getAuthUser(req);
+    if (!user || (user.role !== "admin" && user.role !== "seller")) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    await connectToDatabase();
     const { id } = await params;
     const { status } = await req.json();
-    const now = new Date();
-    
-    const statusUpdate: Record<string, unknown> = { status };
-    if (status === "packed") statusUpdate.packedAt = now;
-    if (status === "shipped") statusUpdate.shippedAt = now;
-    if (status === "out_for_delivery") statusUpdate.outForDeliveryAt = now;
-    if (status === "delivered") statusUpdate.deliveredAt = now;
 
-    const order = await prisma.order.update({
-      where: { id },
-      data: statusUpdate,
-      include: { items: { include: { product: true } }, address: true },
-    });
+    const order = await Order.findByIdAndUpdate(
+      id,
+      { status },
+      { new: true }
+    ).lean();
+
+    if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
     return NextResponse.json(order);
   } catch {
-    return NextResponse.json({ error: "Failed" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to update order status" }, { status: 500 });
   }
 }

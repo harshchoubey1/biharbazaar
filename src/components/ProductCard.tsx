@@ -6,27 +6,29 @@ import { useCart } from "@/context/CartContext";
 
 const categoryEmoji: Record<string, string> = {
   "Mithila Art": "🎨",
-  Handlooms: "🧵",
-  Spices: "🌶️",
+  Handlooms: "🥻",
+  Spices: "🌿",
   Sweets: "🍬",
   Handicrafts: "🏺",
   Electronics: "📱",
 };
 
-export default function ProductCard({ product }: { product: Product }) {
+export default function ProductCard({ product }: { product: any }) {
   const { addToCart } = useCart();
   const discount = product.originalPrice
     ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
     : 0;
 
+  const productId = product.id || product._id;
+
   return (
     <div
-      id={`product-card-${product.id}`}
+      id={`product-card-${productId}`}
       className="group relative flex flex-col rounded-2xl overflow-hidden bg-white dark:bg-white/5 border border-black/5 dark:border-white/5 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.1),0_2px_8px_rgba(0,0,0,0.04)] hover:-translate-y-2 transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]"
     >
-      <Link href={`/product/${product.id}`}>
-        <div className={`relative w-full aspect-square overflow-hidden ${(product.image.startsWith('http') || product.image.startsWith('/')) ? '' : product.image}`}>
-          {(product.image.startsWith('http') || product.image.startsWith('/')) && (
+      <Link href={`/product/${productId}`}>
+        <div className={`relative w-full aspect-square overflow-hidden ${(product.image?.startsWith('http') || product.image?.startsWith('/')) ? '' : product.image || 'bg-gray-200'}`}>
+          {(product.image?.startsWith('http') || product.image?.startsWith('/')) && (
             <img src={product.image} alt={product.name} className="absolute inset-0 w-full h-full object-cover" />
           )}
           {/* Discount badge */}
@@ -57,7 +59,7 @@ export default function ProductCard({ product }: { product: Product }) {
           </div>
 
           {/* Product emoji */}
-          {(!product.image.startsWith('http') && !product.image.startsWith('/')) && (
+          {(!product.image?.startsWith('http') && !product.image?.startsWith('/')) && (
             <div className="absolute inset-0 flex items-center justify-center text-6xl opacity-20 group-hover:opacity-30 group-hover:scale-110 group-hover:rotate-3 transition-all duration-500">
               {categoryEmoji[product.category] || "📦"}
             </div>
@@ -72,7 +74,7 @@ export default function ProductCard({ product }: { product: Product }) {
         <div className="text-[11px] font-semibold uppercase tracking-wider opacity-40">
           {product.vendor}
         </div>
-        <Link href={`/product/${product.id}`}>
+        <Link href={`/product/${productId}`}>
           <h3 className="font-bold text-[0.95rem] leading-snug group-hover:text-primary transition-colors duration-200">
             {product.name}
           </h3>

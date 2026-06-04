@@ -519,8 +519,8 @@ export const products: Product[] = [
 
 export const categories = [
   { name: "Mithila Art", icon: "🎨", color: "bg-red-50 dark:bg-red-950/30" },
-  { name: "Handlooms", icon: "🧵", color: "bg-orange-50 dark:bg-orange-950/30" },
-  { name: "Spices", icon: "🌶️", color: "bg-green-50 dark:bg-green-950/30" },
+  { name: "Handlooms", icon: "🥻", color: "bg-orange-50 dark:bg-orange-950/30" },
+  { name: "Spices", icon: "🌿", color: "bg-green-50 dark:bg-green-950/30" },
   { name: "Sweets", icon: "🍬", color: "bg-yellow-50 dark:bg-yellow-950/30" },
   { name: "Handicrafts", icon: "🏺", color: "bg-amber-50 dark:bg-amber-950/30" },
   { name: "Electronics", icon: "📱", color: "bg-blue-50 dark:bg-blue-950/30" },

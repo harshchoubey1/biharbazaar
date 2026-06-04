@@ -32,11 +32,16 @@
   --animate-fade-in-right: fadeInRight 0.7s cubic-bezier(0.22,1,0.36,1) forwards;
   --animate-scale-in: scaleIn 0.5s cubic-bezier(0.22,1,0.36,1) forwards;
   --animate-float: float 6s ease-in-out infinite;
+  --animate-float-3d: float3d 8s ease-in-out infinite;
   --animate-morph: morph 8s ease-in-out infinite;
   --animate-marquee: marquee 30s linear infinite;
   --animate-spin-slow: counter-spin 20s linear infinite;
   --animate-orbit: orbit 30s linear infinite;
   --animate-scan-y: scanY 3s linear infinite;
+  --animate-card-rise: cardRise 1s cubic-bezier(0.22,1,0.36,1) forwards;
+  --animate-shimmer: shimmer 2.5s linear infinite;
+  --animate-pulse-glow: pulseGlow 3s ease-in-out infinite;
+  --animate-rotate-3d: rotate3d 12s ease-in-out infinite;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -119,6 +124,95 @@ body {
   10% { opacity: 1; }
   90% { opacity: 1; }
   100% { top: 100%; opacity: 0; }
+}
+
+@keyframes float3d {
+  0%, 100% { transform: translateY(0px) rotateX(0deg) rotateY(0deg); }
+  25% { transform: translateY(-18px) rotateX(4deg) rotateY(-3deg); }
+  50% { transform: translateY(-10px) rotateX(-2deg) rotateY(5deg); }
+  75% { transform: translateY(-22px) rotateX(3deg) rotateY(-4deg); }
+}
+
+@keyframes cardRise {
+  from { opacity: 0; transform: perspective(1000px) translateY(60px) rotateX(25deg) scale(0.92); }
+  to { opacity: 1; transform: perspective(1000px) translateY(0) rotateX(0deg) scale(1); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 20px rgba(230,126,34,0.3), 0 0 60px rgba(230,126,34,0.1); }
+  50% { box-shadow: 0 0 40px rgba(230,126,34,0.5), 0 0 100px rgba(230,126,34,0.2); }
+}
+
+@keyframes rotate3d {
+  0% { transform: perspective(800px) rotateX(0deg) rotateY(0deg); }
+  25% { transform: perspective(800px) rotateX(5deg) rotateY(10deg); }
+  50% { transform: perspective(800px) rotateX(-3deg) rotateY(-8deg); }
+  75% { transform: perspective(800px) rotateX(7deg) rotateY(5deg); }
+  100% { transform: perspective(800px) rotateX(0deg) rotateY(0deg); }
+}
+
+@keyframes heroParticle {
+  0% { transform: translateY(0) translateX(0) scale(1); opacity: 0.6; }
+  33% { transform: translateY(-40px) translateX(20px) scale(1.2); opacity: 1; }
+  66% { transform: translateY(-20px) translateX(-15px) scale(0.8); opacity: 0.7; }
+  100% { transform: translateY(0) translateX(0) scale(1); opacity: 0.6; }
+}
+
+/* ===== 3D HERO STYLES ===== */
+.hero-3d-scene {
+  perspective: 1200px;
+  perspective-origin: 50% 40%;
+}
+
+.hero-3d-card {
+  transform-style: preserve-3d;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.hero-3d-card:hover {
+  transform: perspective(1000px) rotateY(-8deg) rotateX(4deg) translateZ(20px);
+}
+
+.card-3d-inner {
+  transform-style: preserve-3d;
+  animation: var(--animate-float-3d);
+}
+
+.floating-badge {
+  animation: float 4s ease-in-out infinite;
+  transform-style: preserve-3d;
+}
+
+.floating-badge:nth-child(2) { animation-delay: -1.5s; }
+.floating-badge:nth-child(3) { animation-delay: -3s; }
+
+.glow-text {
+  text-shadow: 0 0 40px rgba(230, 126, 34, 0.4), 0 0 80px rgba(230, 126, 34, 0.15);
+}
+
+.shimmer-border {
+  position: relative;
+  overflow: hidden;
+}
+.shimmer-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(135deg, transparent 30%, rgba(230,126,34,0.6) 50%, transparent 70%);
+  background-size: 200% 200%;
+  animation: shimmer 2.5s linear infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
 }
 
 /* ===== PDP STYLES (product detail page — not refactored) ===== */

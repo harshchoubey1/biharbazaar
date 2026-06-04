@@ -1,22 +1,34 @@
-import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
+import connectToDatabase from "@/lib/mongodb";
+import SellerProfile from "@/models/SellerProfile";
+import User from "@/models/User";
+import { getAuthUser } from "@/lib/apiAuth";
 
-export async function GET() {
+// GET /api/admin/sellers
+export async function GET(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user || (session.user as any).role !== "admin") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const user = await getAuthUser(req);
+    if (!user || user.role !== "admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const sellers = await prisma.sellerProfile.findMany({
-      include: { user: { select: { id: true, name: true, email: true, createdAt: true } } },
-      orderBy: { createdAt: "desc" },
-    });
+    await connectToDatabase();
+    const sellers = await SellerProfile.find({}).sort({ createdAt: -1 }).lean();
 
-    return NextResponse.json(sellers);
-  } catch (error) {
-    console.error(error);
+    // Enrich with user email
+    const enriched = await Promise.all(
+      sellers.map(async (s) => {
+        let email = "";
+        try {
+          const u = await User.findById(s.userId).lean();
+          email = (u as any)?.email || "";
+        } catch {}
+        return { ...s, user: { email } };
+      })
+    );
+
+    return NextResponse.json(enriched);
+  } catch {
     return NextResponse.json({ error: "Failed to fetch sellers" }, { status: 500 });
   }
 }

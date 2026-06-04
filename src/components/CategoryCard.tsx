@@ -1,15 +1,37 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { products, type Product } from "@/data/products";
 
-const categoryEmoji: Record<string, string> = {
-  "Mithila Art": "🎨",
-  Handlooms: "🧵",
-  Spices: "🌶️",
-  Sweets: "🍬",
-  Handicrafts: "🏺",
-  Electronics: "📱",
+const categoryDetails: Record<string, { image: string; tag: string; desc: string }> = {
+  "Mithila Art": {
+    image: "https://images.unsplash.com/photo-1579783900862-c7f8fb00d3d4?q=80&w=600",
+    tag: "GI Tagged",
+    desc: "Ancient Mithila wall painting heritage",
+  },
+  Handlooms: {
+    image: "https://images.unsplash.com/photo-1617627143750-d86bc21e42bb?q=80&w=600",
+    tag: "100% Pure Silk",
+    desc: "Famous Bhagalpuri handwoven silk",
+  },
+  Spices: {
+    image: "https://images.unsplash.com/photo-1599940824399-b87987ceb72a?q=80&w=600",
+    tag: "Organic",
+    desc: "Aromatic herbs & ground spices",
+  },
+  Sweets: {
+    image: "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?q=80&w=600",
+    tag: "Freshly Made",
+    desc: "Nalanda's legendary Silao Khaja",
+  },
+  Handicrafts: {
+    image: "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?q=80&w=600",
+    tag: "Artisan Made",
+    desc: "Sikki grass & stone sculptures",
+  },
+  Electronics: {
+    image: "https://images.unsplash.com/photo-1546868871-7041f2a55e12?q=80&w=600",
+    tag: "Local Service",
+    desc: "Patna assembled premium audio & tech",
+  },
 };
 
 export default function CategoryCard({
@@ -23,99 +45,75 @@ export default function CategoryCard({
   index?: number;
   isInView?: boolean;
 }) {
-  const [activeIndex, setActiveIndex] = useState(0);
-
-  // Get products for this category
-  const categoryProducts = useMemo(
-    () => products.filter((p) => p.category === name),
-    [name]
-  );
-
-  // Auto-cycle through products
-  useEffect(() => {
-    if (categoryProducts.length <= 1) return;
-    const interval = setInterval(() => {
-      setActiveIndex((prev) => (prev + 1) % categoryProducts.length);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, [categoryProducts.length]);
-
-  const currentProduct = categoryProducts[activeIndex];
-  const productCount = categoryProducts.length;
+  const details = categoryDetails[name] || {
+    image: "https://images.unsplash.com/photo-1513519245088-0e12902e5a38?q=80&w=600",
+    tag: " Bihar Heritage",
+    desc: "Explore regional heritage products",
+  };
 
   return (
     <Link
       href={`/shop?category=${encodeURIComponent(name)}`}
       className={`
-        group relative block rounded-2xl overflow-hidden aspect-[4/5]
+        group relative block rounded-3xl overflow-hidden aspect-[3/4]
         border border-black/5 dark:border-white/5
-        shadow-[0_1px_3px_rgba(0,0,0,0.04),0_4px_12px_rgba(0,0,0,0.03)]
-        hover:shadow-[0_8px_30px_rgba(0,0,0,0.1),0_2px_8px_rgba(0,0,0,0.05)]
-        hover:-translate-y-2
+        shadow-md hover:shadow-2xl hover:-translate-y-2
         transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]
         cursor-pointer
         ${isInView ? "animate-fade-in-up" : "opacity-0"}
       `}
-      style={{ animationDelay: `${index * 100}ms` }}
+      style={{ animationDelay: `${index * 80}ms` }}
     >
-      {/* Cycling product backgrounds */}
-      {categoryProducts.map((product, i) => (
-        <div
-          key={product.id}
-          className={`
-            absolute inset-0 transition-all duration-700 ease-in-out
-            ${product.image}
-            ${i === activeIndex ? "opacity-100 scale-100" : "opacity-0 scale-110"}
-          `}
-        />
-      ))}
+      {/* Background Image */}
+      <div
+        className="absolute inset-0 bg-cover bg-center scale-100 group-hover:scale-110 transition-transform duration-700 ease-out"
+        style={{ backgroundImage: `url(${details.image})` }}
+      />
 
-      {/* Dark gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/5 group-hover:from-black/80 group-hover:via-black/30 transition-all duration-500" />
+      {/* Modern Gradient Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-900/40 to-transparent opacity-85 group-hover:opacity-90 transition-opacity duration-500" />
 
-      {/* Cycling product emoji */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-6xl opacity-20 group-hover:opacity-30 group-hover:scale-110 transition-all duration-500">
-          {categoryEmoji[name] || "📦"}
+      {/* Top Tag Badge */}
+      <div className="absolute top-4 left-4 z-10">
+        <span className="text-[10px] font-bold tracking-wider uppercase bg-white/10 dark:bg-black/40 backdrop-blur-md text-white/90 border border-white/20 px-2.5 py-1 rounded-full">
+          {details.tag}
         </span>
       </div>
 
-      {/* Product name cycling through */}
-      {currentProduct && (
-        <div className="absolute top-3 left-3 right-3">
-          <div className="bg-white/10 dark:bg-white/5 backdrop-blur-md rounded-lg px-3 py-1.5 inline-block">
-            <p className="text-white text-[10px] font-medium truncate max-w-full">
-              {currentProduct.name}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Bottom content */}
-      <div className="absolute bottom-0 left-0 right-0 p-4">
-        {/* Dots indicator */}
-        <div className="flex gap-1 mb-3">
-          {categoryProducts.slice(0, 5).map((_, i) => (
-            <div
-              key={i}
-              className={`h-1 rounded-full transition-all duration-300 ${
-                i === activeIndex % Math.min(categoryProducts.length, 5)
-                  ? "bg-white w-4"
-                  : "bg-white/30 w-1.5"
-              }`}
-            />
-          ))}
+      {/* Content Container */}
+      <div className="absolute inset-x-0 bottom-0 p-5 z-10 flex flex-col justify-end min-h-[50%]">
+        {/* Category Header */}
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-2xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)] group-hover:scale-125 transition-transform duration-300">
+            {icon}
+          </span>
+          <h3 className="text-white font-extrabold text-lg leading-tight tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+            {name}
+          </h3>
         </div>
 
-        {/* Category info */}
-        <div className="flex items-center gap-2">
-          <span className="text-xl">{icon}</span>
-          <h3 className="text-white font-bold text-sm leading-tight">{name}</h3>
+        {/* Short Description */}
+        <p className="text-white/70 text-xs font-medium line-clamp-2 transform translate-y-2 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-300">
+          {details.desc}
+        </p>
+
+        {/* Call to action text */}
+        <div className="mt-3 flex items-center gap-1 text-[11px] font-bold text-amber-400 opacity-80 group-hover:opacity-100 transition-opacity duration-300">
+          <span>Explore Shop</span>
+          <svg
+            className="w-3.5 h-3.5 transform group-hover:translate-x-1 transition-transform duration-300"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth="3"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
         </div>
       </div>
 
-      {/* Hover shimmer effect */}
-      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-in-out" />
+      {/* Shimmer Border Effect */}
+      <div className="absolute inset-0 border-2 border-transparent group-hover:border-amber-400/30 rounded-3xl pointer-events-none transition-colors duration-500" />
     </Link>
   );
 }

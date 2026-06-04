@@ -1,141 +1,108 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+import connectToDatabase from "@/lib/mongodb";
+import ProductModel from "@/models/Product";
+import { getAuthUser } from "@/lib/apiAuth";
+import { products as seedProducts } from "@/data/products";
 
-// Get all products (with optional filters)
+// GET /api/products
 export async function GET(req: NextRequest) {
   try {
+    await connectToDatabase();
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
     const search = searchParams.get("search");
     const sort = searchParams.get("sort");
     const sellerId = searchParams.get("sellerId");
 
-    const where: any = { status: "active" };
-
-    if (sellerId) {
-      const session = await auth();
-      if (session?.user?.id === sellerId || (session?.user as any)?.role === "admin") {
-        delete where.status;
-      }
-      where.sellerId = sellerId;
+    // Auto-seed if empty
+    const count = await ProductModel.countDocuments();
+    if (count === 0) {
+      await ProductModel.insertMany(
+        seedProducts.map((p) => ({
+          ...p,
+          _id: undefined,
+          stock: (p as any).stock ?? 50,
+          status: "active",
+          mockReviews: p.mockReviews || [],
+        }))
+      );
     }
 
-    if (category && category !== "All") where.category = category;
-    
+    const query: any = {};
+    if (sellerId) {
+      const user = await getAuthUser(req);
+      if (!user || (user.id !== sellerId && user.role !== "admin")) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      query.sellerId = sellerId;
+    } else {
+      query.status = "active";
+    }
+
+    if (category && category !== "All") query.category = category;
+
     if (search) {
-      where.AND = [
-        {
-          OR: [
-            { name: { contains: search } },
-            { vendor: { contains: search } },
-            { category: { contains: search } },
-          ],
-        },
+      query.$or = [
+        { name: { $regex: search, $options: "i" } },
+        { vendor: { $regex: search, $options: "i" } },
+        { category: { $regex: search, $options: "i" } },
+        { description: { $regex: search, $options: "i" } },
       ];
     }
 
-    let orderBy: any = { createdAt: "desc" };
-    if (sort === "price-asc") orderBy = { price: "asc" };
-    if (sort === "price-desc") orderBy = { price: "desc" };
-    if (sort === "rating") orderBy = { rating: "desc" };
+    let sortQuery: any = { createdAt: -1 };
+    if (sort === "price-asc") sortQuery = { price: 1 };
+    if (sort === "price-desc") sortQuery = { price: -1 };
+    if (sort === "rating") sortQuery = { rating: -1 };
 
-    const products = await prisma.product.findMany({ where, orderBy });
+    const products = await ProductModel.find(query).sort(sortQuery).lean();
     return NextResponse.json(products);
-  } catch (error) {
-    console.error(error);
+  } catch (err: any) {
+    console.error("GET /api/products error:", err);
     return NextResponse.json({ error: "Failed to fetch products" }, { status: 500 });
   }
 }
 
-// Create a new product (seller)
+// POST /api/products
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    const data = await req.json();
-    
-    console.log("POST /api/products - Session:", JSON.stringify(session));
-    console.log("POST /api/products - Data:", JSON.stringify(data));
-
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const role = (session.user as any).role;
-    if (role !== "seller" && role !== "admin") {
+    await connectToDatabase();
+    const user = await getAuthUser(req);
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (user.role !== "seller" && user.role !== "admin") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    // Check seller is approved (unless admin or demo)
-    const isDemoSeller = session.user.email === "seller@demo.com" || session.user.id?.startsWith("demo-");
-    
-    // Ensure the user exists in the database to prevent foreign key errors
-    // This is especially important for demo accounts that might not be in the DB yet
-    let dbUser = await prisma.user.findUnique({ where: { id: session.user.id } });
-    if (!dbUser && isDemoSeller) {
-      dbUser = await prisma.user.create({
-        data: {
-          id: session.user.id,
-          email: session.user.email || `${session.user.id}@demo.com`,
-          name: session.user.name || "Demo User",
-          role: (session.user as any).role || "seller",
-        }
-      });
-    }
-
-    if (role === "seller" && !isDemoSeller) {
-      const sellerProfile = await prisma.sellerProfile.findUnique({
-        where: { userId: session.user.id },
-      });
-      if (!sellerProfile || sellerProfile.status !== "approved") {
-        return NextResponse.json({ error: "Seller account not approved yet. Please wait for admin approval." }, { status: 403 });
-      }
-    }
-
-    if (!data.name || !data.description || data.price === undefined || !data.category || data.stock === undefined) {
+    const data = await req.json();
+    if (!data.name || !data.description || data.price === undefined || !data.category) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    let images = "[]";
-    try { images = JSON.stringify(Array.isArray(data.images) ? data.images : JSON.parse(data.images || "[]")); } catch {}
-    
-    let highlights = "[]";
-    try { highlights = JSON.stringify(Array.isArray(data.highlights) ? data.highlights : JSON.parse(data.highlights || "[]")); } catch {}
-    
-    let details = "{}";
-    try { details = JSON.stringify(typeof data.details === "object" && data.details !== null ? data.details : JSON.parse(data.details || "{}")); } catch {}
-
-    const product = await prisma.product.create({
-      data: {
-        name: String(data.name),
-        description: String(data.description),
-        price: Number(data.price),
-        originalPrice: data.originalPrice ? Number(data.originalPrice) : null,
-        category: String(data.category),
-        stock: Number(data.stock),
-        image: data.image ? String(data.image) : undefined,
-        images,
-        videoUrl: data.videoUrl ? String(data.videoUrl) : undefined,
-        highlights,
-        details,
-        brandDescription: data.brandDescription ? String(data.brandDescription) : undefined,
-        
-        sellerId: session.user.id,
-        rating: 0,
-        reviews: 0,
-        status: (role === "admin" || isDemoSeller) ? "active" : "draft",
-        vendor: session.user.name || "Unknown Vendor",
-        inStock: Number(data.stock) > 0,
-      }
+    const product = await ProductModel.create({
+      name: data.name,
+      description: data.description,
+      price: Number(data.price),
+      originalPrice: data.originalPrice ? Number(data.originalPrice) : undefined,
+      category: data.category,
+      vendor: data.vendor || user.name,
+      sellerId: user.id,
+      stock: Number(data.stock) || 0,
+      status: user.role === "admin" ? "active" : "active",
+      image: data.image || "",
+      images: Array.isArray(data.images) ? data.images : [],
+      highlights: Array.isArray(data.highlights) ? data.highlights : [],
+      details: typeof data.details === "object" ? data.details : {},
+      brandDescription: data.brandDescription || "",
+      videoUrl: data.videoUrl || "",
+      rating: 0,
+      reviews: 0,
+      inStock: Number(data.stock) > 0,
+      mockReviews: [],
     });
 
-    return NextResponse.json(product);
-  } catch (error: any) {
-    console.error("API Error creating product:", error);
-    return NextResponse.json({ 
-      error: "Failed to create product", 
-      details: error.message,
-      code: error.code 
-    }, { status: 500 });
+    return NextResponse.json(product, { status: 201 });
+  } catch (err: any) {
+    console.error("POST /api/products error:", err);
+    return NextResponse.json({ error: "Failed to create product", details: err.message }, { status: 500 });
   }
 }

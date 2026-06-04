@@ -1,17 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import connectToDatabase from "@/lib/mongodb";
+import Product from "@/models/Product";
 
-// Mark review as helpful (increment count)
-export async function PUT(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    await connectToDatabase();
     const { id } = await params;
-    const review = await prisma.review.update({
-      where: { id },
-      data: { helpful: { increment: 1 } },
-    });
+    const reviewIdNum = Number(id);
+
+    // Update the helpful count in the nested review array
+    const product = await Product.findOneAndUpdate(
+      { "mockReviews.id": reviewIdNum },
+      { $inc: { "mockReviews.$.helpful": 1 } },
+      { new: true }
+    );
+
+    if (!product) {
+      return NextResponse.json({ error: "Review not found" }, { status: 404 });
+    }
+
+    const review = product.mockReviews.find((r: any) => r.id === reviewIdNum);
     return NextResponse.json(review);
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Failed to update review" }, { status: 500 });
+  } catch (error: any) {
+    console.error("PUT /api/reviews/[id] error:", error);
+    return NextResponse.json({ error: "Failed to update review helpfulness" }, { status: 500 });
   }
 }

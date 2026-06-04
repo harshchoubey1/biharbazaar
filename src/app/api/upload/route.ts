@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
-import { auth } from "@/lib/auth";
+import { getAuthUser } from "@/lib/apiAuth";
 
 const MAX_FILES = 8;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
@@ -9,12 +9,12 @@ const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
+    const user = await getAuthUser(req);
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const role = (session.user as any).role;
+    const role = user.role;
     if (role !== "seller" && role !== "admin") {
       return NextResponse.json({ error: "Forbidden: Only sellers can upload files" }, { status: 403 });
     }

@@ -22,6 +22,8 @@ import { MockReview } from "@/data/products";
 import { useCart } from "@/context/CartContext";
 import Link from "next/link";
 import dynamic from "next/dynamic";
+import { getProductById, getProducts, addReview } from "@/lib/browserDb";
+
 
 const VirtualTryOn = dynamic(() => import("@/components/VirtualTryOn"), { ssr: false });
 
@@ -290,32 +292,18 @@ export default function ProductDetailPage() {
   useEffect(() => {
     if (!params.id) return;
     setLoading(true);
-
-    // Fetch specific product
-    fetch(`/api/products/${params.id}`)
-      .then(r => r.json())
-      .then(p => {
-        if (p.error) throw new Error(p.error);
-        const mapped = {
-          ...p,
-          images: Array.isArray(p.images) ? p.images : (typeof p.images === 'string' ? JSON.parse(p.images || "[]") : []),
-          highlights: Array.isArray(p.highlights) ? p.highlights : (typeof p.highlights === 'string' ? JSON.parse(p.highlights || "[]") : []),
-          details: typeof p.details === 'object' && p.details !== null ? p.details : (typeof p.details === 'string' ? JSON.parse(p.details || "{}") : {}),
-          mockReviews: p.mockReviews || [],
-        };
-        setProduct(mapped);
-      })
-      .catch(e => console.error("Error fetching product:", e))
-      .finally(() => {
-        // Fetch all products for "Similar Products"
-        fetch("/api/products")
-          .then(r => r.json())
-          .then(data => {
-            if (Array.isArray(data)) setAllProducts(data);
-          })
-          .catch(e => console.error(e))
-          .finally(() => setLoading(false));
-      });
+    try {
+      const p = getProductById(params.id as string);
+      if (p) {
+        setProduct(p);
+      }
+      const data = getProducts();
+      setAllProducts(data);
+    } catch (e) {
+      console.error("Error loading product detail:", e);
+    } finally {
+      setLoading(false);
+    }
   }, [params.id]);
   const isTryOnEligible = ["Handlooms", "Mithila Art", "Handicrafts"].includes(product?.category ?? "");
 
@@ -385,10 +373,11 @@ export default function ProductDetailPage() {
   };
 
   const handleReviewSubmit = (review: Omit<MockReview, "id" | "helpful">) => {
-    setUserReviews((prev) => [
-      { ...review, id: Date.now(), helpful: 0 },
-      ...prev,
-    ]);
+    const updated = addReview(product.id, review);
+    if (updated) {
+      setProduct(updated);
+      alert("Thank you! Your review has been submitted successfully.");
+    }
     setShowWriteReview(false);
   };
 

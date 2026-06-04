@@ -1,10 +1,12 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ProductCard from "@/components/ProductCard";
 import CategoryCard from "@/components/CategoryCard";
+import Hero3D from "@/components/Hero3D";
 import { categories } from "@/data/products";
 
 // ===== INTERSECTION OBSERVER =====
@@ -90,120 +92,41 @@ export default function Home() {
   const newsletter = useInView();
   const stats = useInView();
 
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All");
   const [featuredProducts, setFeaturedProducts] = useState<any[]>([]);
+
   useEffect(() => {
     fetch("/api/products")
-      .then(r => r.json())
-      .then(data => {
-        if (!Array.isArray(data)) return;
-        const mapped = data.map((p: any) => ({
-          ...p,
-          images: Array.isArray(p.images) ? p.images : (typeof p.images === 'string' ? JSON.parse(p.images || "[]") : []),
-        }));
-        setFeaturedProducts(mapped.slice(0, 8));
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setFeaturedProducts(data);
+        }
       })
-      .catch(e => console.error(e));
+      .catch((e) => console.error("Error fetching products:", e));
   }, []);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      router.push(`/shop?search=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
+  const filteredFeatured = selectedCategory === "All"
+    ? featuredProducts
+    : featuredProducts.filter(p => p.category.toLowerCase() === selectedCategory.toLowerCase());
 
   return (
     <div className="relative flex flex-col min-h-screen bg-background">
       <Header />
 
-      {/* ===== HERO ===== */}
-      <section className="relative min-h-[90vh] flex items-center overflow-hidden bg-gradient-to-br from-orange-50 via-amber-50/50 to-purple-50/40 dark:from-[#0d0b08] dark:via-[#0a0a0f] dark:to-[#0c0816]">
-        {/* Animated blobs */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-24 -right-24 w-[500px] h-[500px] rounded-full bg-gradient-to-br from-orange-400 to-yellow-300 opacity-[0.15] dark:opacity-[0.06] blur-[80px] animate-morph" />
-          <div className="absolute -bottom-36 -left-24 w-[400px] h-[400px] rounded-full bg-gradient-to-br from-violet-400 to-pink-400 opacity-[0.12] dark:opacity-[0.05] blur-[80px] animate-morph [animation-delay:-3s]" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full bg-gradient-to-br from-emerald-300 to-sky-300 opacity-[0.08] dark:opacity-[0.03] blur-[80px] animate-morph [animation-delay:-6s]" />
-        </div>
+      {/* ===== HERO 3D ===== */}
+      <Hero3D />
 
-        {/* Grid pattern */}
-        <div className="absolute inset-0 pointer-events-none" style={{
-          backgroundImage: "linear-gradient(rgba(0,0,0,0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,0.015) 1px, transparent 1px)",
-          backgroundSize: "60px 60px",
-        }} />
 
-        {/* Floating icons */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          {floatingIcons.map((ic, i) => (
-            <span
-              key={i}
-              className="absolute text-[2rem] opacity-[0.07] dark:opacity-[0.04] animate-float"
-              style={{ ...ic, animationDelay: ic.delay, animationDuration: ic.dur } as React.CSSProperties}
-            >
-              {ic.emoji}
-            </span>
-          ))}
-        </div>
-
-        <div ref={hero.ref} className="relative z-10 px-4 md:px-8 py-20 max-w-7xl mx-auto w-full">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-            {/* Left */}
-            <div className={`flex flex-col items-center lg:items-start text-center lg:text-left ${hero.isInView ? "" : "opacity-0"}`}>
-              <div className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider text-primary bg-gradient-to-r from-primary/10 to-accent/5 border border-primary/15 rounded-full mb-4 ${hero.isInView ? "animate-fade-in-up" : ""}`}>
-                <span>🛕</span> Bihar&apos;s #1 Marketplace
-              </div>
-
-              <h1 className={`text-4xl sm:text-5xl lg:text-7xl font-black tracking-tighter mb-6 leading-[1.05] ${hero.isInView ? "animate-fade-in-up [animation-delay:100ms]" : ""}`}>
-                Empowering Local
-                <br />
-                Sellers,{" "}
-                <span className="bg-gradient-to-r from-primary via-primary-dark to-accent bg-[length:300%_300%] bg-clip-text text-transparent animate-[gradient-shift_4s_ease_infinite]" style={{ backgroundSize: "300% 300%", animation: "none" }}>
-                  <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Serving Bihar.</span>
-                </span>
-              </h1>
-
-              <p className={`text-lg sm:text-xl opacity-55 max-w-xl mb-10 leading-relaxed ${hero.isInView ? "animate-fade-in-up [animation-delay:200ms]" : ""}`}>
-                Discover authentic Bihari products — from Madhubani art to Bhagalpuri silk.
-                Connecting artisans directly to your doorstep with love & trust.
-              </p>
-
-              <div className={`flex flex-col sm:flex-row gap-4 w-full sm:w-auto ${hero.isInView ? "animate-fade-in-up [animation-delay:300ms]" : ""}`}>
-                <Link
-                  href="/shop"
-                  className="inline-flex items-center justify-center gap-2 h-14 px-8 text-[15px] font-semibold text-white bg-gradient-to-r from-primary to-primary-dark rounded-full shadow-lg shadow-primary/30 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/40 transition-all duration-300"
-                >
-                  Start Shopping
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10m0 0L9 4m4 4L9 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                </Link>
-                <Link
-                  href="/seller-register"
-                  className="inline-flex items-center justify-center h-14 px-8 text-[15px] font-semibold rounded-full border-[1.5px] border-black/10 dark:border-white/10 bg-white/50 dark:bg-white/5 backdrop-blur-sm hover:border-primary hover:text-primary hover:-translate-y-0.5 transition-all duration-300"
-                >
-                  Become a Seller
-                </Link>
-              </div>
-
-              <div className={`flex items-center gap-6 mt-10 text-sm opacity-40 ${hero.isInView ? "animate-fade-in-up [animation-delay:400ms]" : ""}`}>
-                <span>✓ Free Shipping</span>
-                <span>✓ Authentic Products</span>
-                <span>✓ Easy Returns</span>
-              </div>
-            </div>
-
-            {/* Right — orbiting visual */}
-            <div className={`hidden lg:flex justify-center ${hero.isInView ? "animate-fade-in-right [animation-delay:300ms]" : "opacity-0"}`}>
-              <div className="relative w-[420px] h-[420px]">
-                <div className="absolute inset-0 rounded-full border border-dashed border-primary/20 animate-spin-slow" />
-                <div className="absolute inset-4 rounded-full border border-dashed border-accent/15 animate-spin-slow [animation-direction:reverse] [animation-duration:25s]" />
-                <div className="absolute inset-12 animate-morph bg-gradient-to-tr from-primary/20 via-accent/10 to-primary-light/20" />
-                {["🎨","🧵","🌶️","🍬","🏺","📱"].map((emoji, i) => (
-                  <div key={i} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 animate-orbit" style={{ animationDelay: `${-i * 5}s` }}>
-                    <span className="text-3xl block animate-spin-slow" style={{ animationDelay: `${-i * 5}s` }}>{emoji}</span>
-                  </div>
-                ))}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-5xl font-black bg-gradient-to-br from-primary to-accent bg-clip-text text-transparent mb-1">BB</div>
-                    <div className="text-xs font-bold uppercase tracking-[0.2em] opacity-35">Bihar Bazaar</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* ===== MARQUEE ===== */}
       <section className="py-4 border-y border-black/5 dark:border-white/5">
@@ -223,13 +146,12 @@ export default function Home() {
       <section ref={stats.ref} className="px-4 md:px-8 py-12 max-w-7xl mx-auto w-full">
         <div className={`flex flex-col sm:flex-row overflow-hidden rounded-2xl bg-gradient-to-r from-primary to-primary-dark shadow-xl shadow-primary/20 ${stats.isInView ? "animate-fade-in-up" : "opacity-0"}`}>
           {[
-            { n: 50000, s: "+", l: "Happy Customers" },
-            { n: 2500, s: "+", l: "Products Listed" },
-            { n: 500, s: "+", l: "Local Sellers" },
-            { n: 38, s: "", l: "Bihar Districts" },
+            { n: 500, s: "+", l: "Artisans Partnered" },
+            { n: 10000, s: "+", l: "Products Sold" },
+            { n: 38, s: "/38", l: "Bihar Districts Covered" },
           ].map((st, i) => (
-            <div key={st.l} className={`flex-1 py-5 px-6 text-center text-white ${i > 0 ? "border-l border-white/10" : ""} hover:bg-white/10 transition-colors`}>
-              <div className="text-2xl sm:text-3xl font-extrabold tracking-tight leading-none mb-1">
+            <div key={i} className="flex-1 flex flex-col items-center justify-center py-8 px-4 text-white border-b sm:border-b-0 sm:border-r border-white/10 last:border-0">
+              <div className="text-3xl sm:text-4xl font-black mb-1">
                 <AnimatedCounter target={st.n} suffix={st.s} />
               </div>
               <div className="text-[11px] font-medium uppercase tracking-wider opacity-75">{st.l}</div>
@@ -262,7 +184,7 @@ export default function Home() {
 
       {/* ===== FEATURED PRODUCTS ===== */}
       <section ref={featured.ref} className="py-16 px-4 md:px-8 max-w-7xl mx-auto w-full">
-        <div className={`flex justify-between items-end mb-10 ${featured.isInView ? "animate-fade-in-up" : "opacity-0"}`}>
+        <div className={`flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6 mb-10 ${featured.isInView ? "animate-fade-in-up" : "opacity-0"}`}>
           <div className="relative pb-3">
             <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider text-primary bg-gradient-to-r from-primary/10 to-accent/5 border border-primary/15 rounded-full mb-3">
               <span>⭐</span> Top Picks
@@ -271,25 +193,40 @@ export default function Home() {
             <p className="opacity-45 mt-2 text-sm">Handpicked items celebrating Bihar&apos;s rich culture</p>
             <div className="absolute bottom-0 left-0 w-14 h-0.5 bg-gradient-to-r from-primary to-accent rounded-full" />
           </div>
-          <Link href="/shop" className="text-primary font-semibold text-sm hover:underline underline-offset-4 transition-all hidden sm:block">
-            View All →
-          </Link>
+
+          {/* Category Tabs */}
+          <div className="flex flex-wrap gap-2">
+            {["All", "Mithila Art", "Handlooms", "Sweets", "Spices", "Handicrafts"].map(cat => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-4 py-2 rounded-full text-xs font-semibold tracking-wide border transition-all duration-300 ${
+                  selectedCategory === cat
+                    ? "bg-primary text-white border-primary shadow-lg shadow-primary/20 scale-105"
+                    : "bg-white dark:bg-white/5 border-black/5 dark:border-white/5 hover:border-primary/30"
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
         </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {featuredProducts.slice(0, 4).map((p, i) => (
-            <div key={p.id} className={featured.isInView ? "animate-fade-in-up" : "opacity-0"} style={{ animationDelay: `${i * 100}ms` }}>
+          {filteredFeatured.slice(0, 8).map((p, i) => (
+            <div key={p._id || p.id} className={featured.isInView ? "animate-fade-in-up" : "opacity-0"} style={{ animationDelay: `${i * 100}ms` }}>
               <ProductCard product={p} />
             </div>
           ))}
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-6">
-          {featuredProducts.slice(4, 8).map((p, i) => (
-            <div key={p.id} className={featured.isInView ? "animate-fade-in-up" : "opacity-0"} style={{ animationDelay: `${(i + 4) * 100}ms` }}>
-              <ProductCard product={p} />
+          {filteredFeatured.length === 0 && (
+            <div className="col-span-full py-16 text-center opacity-40">
+              <div className="text-4xl mb-3">📦</div>
+              <p className="font-semibold text-sm">No products found in this category.</p>
             </div>
-          ))}
+          )}
         </div>
-        <div className={`text-center mt-10 ${featured.isInView ? "animate-fade-in-up [animation-delay:600ms]" : "opacity-0"}`}>
+
+        <div className={`text-center mt-12 ${featured.isInView ? "animate-fade-in-up [animation-delay:400ms]" : "opacity-0"}`}>
           <Link href="/shop" className="inline-flex items-center justify-center h-12 px-8 text-sm font-semibold text-white bg-gradient-to-r from-primary to-primary-dark rounded-full shadow-lg shadow-primary/25 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-primary/35 transition-all duration-300">
             Browse All Products →
           </Link>

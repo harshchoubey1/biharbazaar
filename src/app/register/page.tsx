@@ -1,11 +1,12 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { signIn, useSession } from "next-auth/react";
+import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
+import GoogleAuthButton from "@/components/GoogleAuthButton";
 
 export default function RegisterPage() {
-  const { data: session } = useSession();
+  const { user: mockUser, register: mockRegister, login: mockLogin } = useAuth();
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -16,10 +17,10 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (session?.user) router.replace("/");
-  }, [session, router]);
+    if (mockUser) router.replace("/");
+  }, [mockUser, router]);
 
-  if (session?.user) return null;
+  if (mockUser) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,31 +32,20 @@ export default function RegisterPage() {
     setError("");
 
     try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, role }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Registration failed.");
+      const regRes = await mockRegister(name, email, password, role);
+      if (!regRes.success) {
+        setError(regRes.error || "Registration failed.");
         setLoading(false);
         return;
       }
 
       // Automatically sign in after successful registration
-      const signRes = await signIn("email-password", {
-        redirect: false,
-        email,
-        password,
-      });
-
+      const loginRes = await mockLogin(email, password);
       setLoading(false);
-      if (signRes?.error) {
-        setError("Account created, but failed to log in automatically.");
-      } else if (signRes?.ok) {
+      if (loginRes.success) {
         router.replace("/");
+      } else {
+        setError("Account created, but failed to log in automatically. Please sign in manually.");
       }
     } catch (err) {
       setLoading(false);
@@ -83,6 +73,18 @@ export default function RegisterPage() {
               ⚠️ {error}
             </div>
           )}
+
+          {/* Google Sign Up – shown before the form */}
+          <GoogleAuthButton role={role} onError={(err) => setError(err)} />
+
+          <div className="relative mb-4">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-black/10 dark:border-white/10" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white dark:bg-zinc-900 text-black/50 dark:text-white/50">Or sign up with email</span>
+            </div>
+          </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
             <div>
@@ -159,25 +161,10 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            {/* Google Sign Up Button */}
-            <button
-              type="button"
-              onClick={() => signIn("google", { redirect: true, callbackUrl: "/" })}
-              className="w-full py-2.5 border border-black/20 dark:border-white/20 rounded-lg text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors flex items-center justify-center gap-2"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-              Sign up with Google
-            </button>
-
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 mt-1 bg-gradient-to-b from-amber-300 to-amber-400 hover:from-amber-400 hover:to-amber-500 text-black font-semibold text-sm rounded-lg border border-amber-500/40 transition-all disabled:opacity-60 flex items-center justify-center gap-2 shadow-sm"
+              className="w-full py-2.5 mt-2 bg-gradient-to-b from-amber-300 to-amber-400 hover:from-amber-400 hover:to-amber-500 text-black font-semibold text-sm rounded-lg border border-amber-500/40 transition-all disabled:opacity-60 flex items-center justify-center gap-2 shadow-sm"
             >
               {loading && <span className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />}
               {loading ? "Creating account..." : "Continue"}

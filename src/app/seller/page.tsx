@@ -2,10 +2,27 @@
 import { useState, useRef, useEffect } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { useSession } from "next-auth/react";
 import { useAuth } from "@/context/AuthContext";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { 
+  getSellerProfile, 
+  createSellerProfile, 
+  getProducts, 
+  createProduct, 
+  deleteProduct, 
+  toggleProductStatus 
+} from "@/lib/browserDb";
+
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+  });
+};
+
 
 interface SellerProduct {
   id: string | number;
@@ -53,42 +70,32 @@ export default function SellerPage() {
   useEffect(() => {
     if (!user?.id) return;
     
-    // Fetch Seller Profile & Products
-    const fetchData = async () => {
-      try {
-        const profRes = await fetch(`/api/user`);
-        const profData = await profRes.json();
-        if (profData.sellerProfile) {
-          setSellerStatus(profData.sellerProfile.status);
-          setRejectionReason(profData.sellerProfile.rejectionReason);
-          setSellerProfile(profData.sellerProfile);
-        }
-
-        const prodRes = await fetch(`/api/products?sellerId=${user.id}`);
-        const prodData = await prodRes.json();
-        
-        // If demo user, ensure they are seen as approved even if API is slow
-        if (user.id.startsWith('demo-')) {
-          setSellerStatus("approved");
-        }
-
-        if (Array.isArray(prodData)) {
-          setMyProducts(prodData.map((p: any) => ({
-            ...p,
-            status: p.status === "active" ? "Active" : "Draft",
-            images: Array.isArray(p.images) ? p.images : JSON.parse(p.images || "[]"),
-            highlights: Array.isArray(p.highlights) ? p.highlights : JSON.parse(p.highlights || "[]"),
-            details: typeof p.details === 'object' ? p.details : JSON.parse(p.details || "{}"),
-          })));
-        }
-      } catch (err) {
-        console.error("Error fetching seller data:", err);
-      } finally {
-        setLoading(false);
+    try {
+      const prof = getSellerProfile(user.id);
+      if (prof) {
+        setSellerStatus(prof.status);
+        setRejectionReason(prof.rejectionReason || null);
+        setSellerProfile(prof);
+      } else if (user.id.startsWith('demo-')) {
+        const demoProf = createSellerProfile(user.id, {
+          shopName: "Bihar Bazaar Seller",
+          description: "Authentic local seller of handloom sarees and sweets from Bhagalpur.",
+          email: user.email || "seller@demo.com"
+        });
+        setSellerStatus(demoProf.status);
+        setSellerProfile(demoProf);
       }
-    };
 
-    fetchData();
+      const prods = getProducts({ sellerId: user.id });
+      setMyProducts(prods.map((p: any) => ({
+        ...p,
+        status: p.status === "draft" ? "Draft" : "Active",
+      })));
+    } catch (err) {
+      console.error("Error fetching local seller data:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [user?.id]);
 
   if (!user) {
@@ -229,19 +236,7 @@ export default function SellerPage() {
     try {
       let uploadedUrls: string[] = [];
       if (formImages.length > 0) {
-        const uploadFormData = new FormData();
-        formImages.forEach((img) => {
-          uploadFormData.append("files", img.file);
-        });
-
-        const uploadRes = await fetch("/api/upload", {
-          method: "POST",
-          body: uploadFormData,
-        });
-
-        if (!uploadRes.ok) throw new Error("Image upload failed");
-        const data = await uploadRes.json();
-        uploadedUrls = data.urls;
+        uploadedUrls = await Promise.all(formImages.map(img => fileToBase64(img.file)));
       }
 
       const productPayload = {
@@ -253,49 +248,39 @@ export default function SellerPage() {
         status: "active",
         description: formData.description,
         image: uploadedUrls.length > 0 ? uploadedUrls[0] : "bg-zinc-200 dark:bg-zinc-800",
-        images: JSON.stringify(uploadedUrls),
+        images: uploadedUrls,
         videoUrl: formVideo?.name || null,
-        highlights: JSON.stringify(formHighlights.filter((h) => h.trim())),
-        details: JSON.stringify(
-          Object.fromEntries(
-            formDetails.filter((d) => d.key.trim() && d.value.trim()).map((d) => [d.key, d.value])
-          )
+        highlights: formHighlights.filter((h) => h.trim()),
+        details: Object.fromEntries(
+          formDetails.filter((d) => d.key.trim() && d.value.trim()).map((d) => [d.key, d.value])
         ),
         brandDescription: formData.brandDescription,
         vendor: sellerProfile?.shopName || user.name || "Unknown Seller",
         sellerId: user.id,
       };
 
-      const res = await fetch("/api/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(productPayload),
-      });
-
-      const resData = await res.json();
-      if (!res.ok) {
-        throw new Error(resData.error || resData.details || "Failed to save product");
+      const savedProduct = createProduct(productPayload);
+      if (!savedProduct) {
+        throw new Error("Failed to save product locally");
       }
-      
-      const savedProduct = resData;
-      
+
       const newProd: SellerProduct = {
         id: savedProduct.id,
         name: savedProduct.name,
         price: savedProduct.price,
         originalPrice: savedProduct.originalPrice || undefined,
         category: savedProduct.category,
-        stock: savedProduct.stock,
-        status: savedProduct.status === "active" ? "Active" : "Draft",
+        stock: (savedProduct as any).stock || Number(formData.stock),
+        status: (savedProduct as any).status === "draft" ? "Draft" : "Active",
         description: savedProduct.description,
-        images: uploadedUrls,
-        videoUrl: savedProduct.videoUrl || undefined,
-        highlights: JSON.parse(savedProduct.highlights),
-        details: JSON.parse(savedProduct.details),
+        images: savedProduct.images || [],
+        videoUrl: (savedProduct as any).videoUrl || undefined,
+        highlights: savedProduct.highlights || [],
+        details: savedProduct.details || {},
         brandDescription: savedProduct.brandDescription || "",
       };
 
-      setMyProducts((prev) => [...prev, newProd]);
+      setMyProducts((prev) => [newProd, ...prev]);
       resetForm();
       setShowAddForm(false);
       alert("Product added successfully!");
@@ -308,13 +293,25 @@ export default function SellerPage() {
   };
 
   const handleDelete = (id: string | number) => {
-    setMyProducts((prev) => prev.filter((p) => p.id !== id));
+    if (confirm("Are you sure you want to delete this product?")) {
+      const success = deleteProduct(id);
+      if (success) {
+        setMyProducts((prev) => prev.filter((p) => p.id !== id));
+      } else {
+        alert("Failed to delete product.");
+      }
+    }
   };
 
   const toggleStatus = (id: string | number) => {
-    setMyProducts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status: p.status === "Active" ? "Draft" : "Active" } : p))
-    );
+    const success = toggleProductStatus(id);
+    if (success) {
+      setMyProducts((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, status: p.status === "Active" ? "Draft" : "Active" } : p))
+      );
+    } else {
+      alert("Failed to update status.");
+    }
   };
 
   const totalRevenue = myProducts.reduce((sum, p) => sum + p.price * p.stock, 0);

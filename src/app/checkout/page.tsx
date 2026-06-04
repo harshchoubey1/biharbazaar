@@ -17,9 +17,11 @@ export default function CheckoutPage() {
   const [placing, setPlacing] = useState(false);
 
   const [newAddr, setNewAddr] = useState<Address>({
-    fullName: user?.name || "",
+    id: "addr-" + Date.now().toString(36),
+    label: "Home",
+    name: user?.name || "",
     phone: "",
-    street: "",
+    line1: "",
     city: "",
     state: "Bihar",
     pincode: "",
@@ -59,7 +61,7 @@ export default function CheckoutPage() {
   const handlePlaceOrder = () => {
     let address: Address;
     if (showNewAddr || addresses.length === 0) {
-      if (!newAddr.fullName || !newAddr.phone || !newAddr.street || !newAddr.city || !newAddr.pincode) {
+      if (!newAddr.name || !newAddr.phone || !newAddr.line1 || !newAddr.city || !newAddr.pincode) {
         alert("Please fill all address fields.");
         return;
       }
@@ -72,7 +74,7 @@ export default function CheckoutPage() {
     setPlacing(true);
     setTimeout(() => {
       const orderId = placeOrder({
-        items: items.map((i) => ({ name: i.product.name, price: i.product.price, quantity: i.quantity })),
+        items: items.map((i) => ({ productId: i.product.id, name: i.product.name, price: i.product.price, qty: i.quantity, image: i.product.image, vendor: i.product.vendor })),
         total: grandTotal,
         address,
       });
@@ -99,8 +101,8 @@ export default function CheckoutPage() {
                     <label key={idx} className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-colors ${selectedAddrIdx === idx ? "border-primary bg-primary/5" : "border-black/5 dark:border-white/5"}`}>
                       <input type="radio" name="address" checked={selectedAddrIdx === idx} onChange={() => setSelectedAddrIdx(idx)} className="mt-1 accent-primary" />
                       <div>
-                        <p className="font-semibold">{addr.fullName}</p>
-                        <p className="text-sm text-black/60 dark:text-white/60">{addr.street}, {addr.city}, {addr.state} - {addr.pincode}</p>
+                        <p className="font-semibold">{addr.name}</p>
+                        <p className="text-sm text-black/60 dark:text-white/60">{addr.line1}, {addr.city}, {addr.state} - {addr.pincode}</p>
                         <p className="text-sm text-black/60 dark:text-white/60">Phone: {addr.phone}</p>
                       </div>
                     </label>
@@ -113,11 +115,11 @@ export default function CheckoutPage() {
 
               {(showNewAddr || addresses.length === 0) && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <input placeholder="Full Name" value={newAddr.fullName} onChange={(e) => setNewAddr({ ...newAddr, fullName: e.target.value })}
+                  <input placeholder="Full Name" value={newAddr.name} onChange={(e) => setNewAddr({ ...newAddr, name: e.target.value })}
                     className="px-4 py-3 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary/50" />
                   <input placeholder="Phone Number" value={newAddr.phone} onChange={(e) => setNewAddr({ ...newAddr, phone: e.target.value })}
                     className="px-4 py-3 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary/50" />
-                  <input placeholder="Street Address" value={newAddr.street} onChange={(e) => setNewAddr({ ...newAddr, street: e.target.value })}
+                  <input placeholder="Street Address" value={newAddr.line1} onChange={(e) => setNewAddr({ ...newAddr, line1: e.target.value })}
                     className="sm:col-span-2 px-4 py-3 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary/50" />
                   <input placeholder="City" value={newAddr.city} onChange={(e) => setNewAddr({ ...newAddr, city: e.target.value })}
                     className="px-4 py-3 rounded-xl border border-black/10 dark:border-white/10 bg-white dark:bg-zinc-900 focus:outline-none focus:ring-2 focus:ring-primary/50" />
